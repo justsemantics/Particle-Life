@@ -1,0 +1,312 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel UpdateAgents
+#pragma kernel QuadTree
+
+struct Agent
+{
+    int species;
+    float2 position;
+    float2 velocity;
+    uint mortonCode;
+};
+
+struct Species
+{
+    float4 color;
+};
+
+struct Rule
+{
+    float2 force;
+};
+
+struct LeafNode
+{
+    int index;
+};
+
+struct InternalNode
+{
+    int index;
+    int childAIndex;
+    int childBIndex;
+};
+
+int numAgents;
+int numSpecies;
+int resolution;
+
+float deltaTime;
+
+float minDistance, maxDistance, repulsionForce;
+
+RWStructuredBuffer<Agent> agents;
+RWStructuredBuffer<LeafNode> leafNodes;
+RWStructuredBuffer<InternalNode> internalNodes;
+StructuredBuffer<Species> species;
+StructuredBuffer<Rule> rules;
+
+RWTexture2D<float4> Result;
+
+
+//Morton code bit magic from https://fgiesen.wordpress.com/2009/12/13/decoding-morton-codes/
+
+// "Insert" a 0 bit after each of the 16 low bits of x
+uint Part1By1(uint x)
+{
+    x &= 0x0000ffff; // x = ---- ---- ---- ---- fedc ba98 7654 3210
+    x = (x ^ (x << 8)) & 0x00ff00ff; // x = ---- ---- fedc ba98 ---- ---- 7654 3210
+    x = (x ^ (x << 4)) & 0x0f0f0f0f; // x = ---- fedc ---- ba98 ---- 7654 ---- 3210
+    x = (x ^ (x << 2)) & 0x33333333; // x = --fe --dc --ba --98 --76 --54 --32 --10
+    x = (x ^ (x << 1)) & 0x55555555; // x = -f-e -d-c -b-a -9-8 -7-6 -5-4 -3-2 -1-0
+    return x;
+}
+
+// Inverse of Part1By1 - "delete" all odd-indexed bits
+uint Compact1By1(uint x)
+{
+    x &= 0x55555555; // x = -f-e -d-c -b-a -9-8 -7-6 -5-4 -3-2 -1-0
+    x = (x ^ (x >> 1)) & 0x33333333; // x = --fe --dc --ba --98 --76 --54 --32 --10
+    x = (x ^ (x >> 2)) & 0x0f0f0f0f; // x = ---- fedc ---- ba98 ---- 7654 ---- 3210
+    x = (x ^ (x >> 4)) & 0x00ff00ff; // x = ---- ---- fedc ba98 ---- ---- 7654 3210
+    x = (x ^ (x >> 8)) & 0x0000ffff; // x = ---- ---- ---- ---- fedc ba98 7654 3210
+    return x;
+}
+
+uint EncodeMorton2(uint x, uint y)
+{
+    return (Part1By1(y) << 1) + Part1By1(x);
+}
+
+uint DecodeMorton2X(uint code)
+{
+    return Compact1By1(code >> 0);
+}
+
+uint DecodeMorton2Y(uint code)
+{
+    return Compact1By1(code >> 1);
+}
+
+
+
+
+float CalculateRepulsionForce(float distanceSquared)
+{
+    float t = distanceSquared / minDistance;
+    float force = repulsionForce * t - repulsionForce;
+    
+    return force;
+}
+
+float CalculateForce(float distanceSquared, Rule rule)
+{
+    float t = (distanceSquared - minDistance) / (maxDistance - minDistance);
+    float cutoff = rule.force.x / (maxDistance - minDistance);
+    float force = t < cutoff ? lerp(0, rule.force.y, t / cutoff) : lerp(rule.force.y, 0, t / (1 - cutoff));
+
+    return force;
+}
+
+int LeadingBitsInCommon(uint mortonCode1, uint mortonCode2)
+{
+    return 32 - firstbithigh(mortonCode1 ^ mortonCode2);
+}
+
+int2 DetermineRange(int id)
+{
+    
+    int commonPrefixLength;
+    //checking adjacent morton codes to find direction of the split
+    uint currentMortonCode = agents[id].mortonCode;
+    uint nextMortonCode, prevMortonCode;
+    
+    int direction;
+
+    //easy to check, and prevents access out of range in the following step
+    if (id == 0)
+    {
+        return int2(0, numAgents - 1);
+    }
+    else
+    {
+        //checking adjacent morton codes to find direction of the split
+        nextMortonCode = agents[id + 1].mortonCode;
+        prevMortonCode = agents[id - 1].mortonCode;
+
+        //whichever direction has a longer common prefix is in the same node
+        int forwardPrefixLength = LeadingBitsInCommon(currentMortonCode, nextMortonCode);
+        int backwardPrefixLength = LeadingBitsInCommon(currentMortonCode, prevMortonCode);
+
+        direction = sign(forwardPrefixLength - backwardPrefixLength);
+        commonPrefixLength = max(forwardPrefixLength, backwardPrefixLength) - 1;
+    }
+    
+    
+    uint adjacentNodeCode = agents[id - direction].mortonCode;
+
+    uint lastCode;
+    int last;
+
+    //this is the shared prefix with the neighbor that is not in the range
+    int sharedPrefixWithAdjacentNode = LeadingBitsInCommon(currentMortonCode, adjacentNodeCode);
+
+    //find the step size that the range is within
+    int step = 1;
+    do
+    {
+        //potential position for other end of range
+        last = id + step * direction;
+
+        //stop looping if we exit the array entirely
+        if (last < 0 || last > numAgents - 1)
+        {
+            break;
+        }
+
+        lastCode = agents[last].mortonCode;
+
+        //double each time
+        step = step << 1;
+    } while (LeadingBitsInCommon(currentMortonCode, lastCode) > sharedPrefixWithAdjacentNode);
+
+    int range = 0;
+
+    do
+    {
+        //half each time
+        step = (step + 1) >> 1;
+        last = id + range + step * direction;
+
+        if (last < 0 || last > numAgents - 1)
+        {
+            break;
+        }
+
+        lastCode = agents[last].mortonCode;
+        if (LeadingBitsInCommon(currentMortonCode, lastCode) > sharedPrefixWithAdjacentNode)
+        {
+            range += step * direction;
+        }
+
+    } while (step > 1);
+
+    last = id + range;
+    
+    return int2(min(id, last), max(id, last));
+}
+
+int FindSplit(int first, int last)
+{
+    uint firstCode = agents[first].mortonCode;
+    uint lastCode = agents[last].mortonCode;
+
+    int commonPrefix = LeadingBitsInCommon(firstCode, lastCode);
+
+    int split = first;
+    int step = last - first;
+
+    do
+    {
+        //increase by decreasingly large steps
+        step = (step + 1) >> 1;
+
+        //checking position if we step this far from the current acceptable step
+        int newSplit = split + step;
+
+        //don't step past the end of the range
+        if (newSplit < last)
+        {
+            //lookup the Agent at the location of the split
+            uint splitCode = agents[newSplit].mortonCode;
+
+            //check if that Agent's code shares more bits (i.e. the XOR produces more leading zeros) than our last guess
+            int splitPrefix = LeadingBitsInCommon(firstCode, splitCode);
+            if (splitPrefix > commonPrefix)
+            {
+                    //cool, resume search from this point
+                split = newSplit;
+            }
+                //otherwise, keep stepping from the previous split
+        }
+    } while (step > 1); //iterate until we have tried stepping at every size
+
+    return split;
+}
+
+
+[numthreads(64,1,1)]
+void UpdateAgents (uint3 id : SV_DispatchThreadID)
+{
+    Agent currentAgent = agents[id.x];
+    
+    float2 force = float2(0, 0);
+    
+    for (int i = 0; i < numAgents; i++)
+    {
+        if (i == id.x)
+            continue;
+        
+        Agent otherAgent = agents[i];
+        float2 currentToOther = otherAgent.position - currentAgent.position;
+        float distanceSquared = dot(currentToOther, currentToOther);
+        
+        if(distanceSquared > maxDistance)
+            continue;
+        
+        
+        float2 directionToOther = normalize(currentToOther);
+        
+        if (distanceSquared < minDistance)
+        {
+            force += directionToOther * CalculateRepulsionForce(distanceSquared);
+            continue;
+        }
+        
+        if (distanceSquared > minDistance)
+        {
+            Rule rule = rules[currentAgent.species + otherAgent.species * numSpecies];
+            force += directionToOther * CalculateForce(distanceSquared, rule);
+        }
+    }
+    
+    currentAgent.velocity += force * deltaTime;
+
+    currentAgent.position += currentAgent.velocity * deltaTime;
+    
+    currentAgent.position = clamp(currentAgent.position, float2(0, 0), float2(resolution, resolution));
+    
+    agents[id.x] = currentAgent;
+    
+    int2 texturePosition = (int2) floor(currentAgent.position);
+    
+    Result[texturePosition] = species[currentAgent.species].color;
+}
+
+[numthreads(64, 1, 1)]
+void QuadTree(uint3 id : SV_DispatchThreadID)
+{
+    LeafNode leaf;
+    leaf.index = id.x;
+    
+    if (id.x >= numAgents - 1)
+    {
+        return;
+    }
+    
+    int2 range = DetermineRange(id.x);
+    
+    if (range.x == range.y)
+    {
+        return;
+    }
+    
+    int split = FindSplit(range.x, range.y);
+    
+    InternalNode internalNode;
+    internalNode.index = id.x;
+    internalNode.childAIndex = split;
+    internalNode.childBIndex = split + 1;
+    
+    internalNodes[id.x] = internalNode;
+}
