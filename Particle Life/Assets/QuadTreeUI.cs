@@ -7,10 +7,14 @@ using UnityEngine;
 
 public class QuadTreeUI : MonoBehaviour
 {
-    public QuadTree quadTree;
+    [SerializeField]
+    int numAgents;
 
     [SerializeField]
-    float layerHeight = 50;
+    float unitHeight = 50;
+
+    [SerializeField]
+    float unitWidth = 50;
 
     [SerializeField]
     RectTransform canvas;
@@ -24,29 +28,42 @@ public class QuadTreeUI : MonoBehaviour
     LeafNodeUI[] leafNodes;
     InternalNodeUI[] internalNodes;
 
+    InternalNodeData[] NodeData;
+    Agent[] Agents;
+
+    bool[] visitedInternalNode;
+
     [SerializeField]
     DrawZCurve drawZCurve, drawZCurvePrefab;
 
     // Start is called before the first frame update
     void Start()
     {
-        leafNodes = new LeafNodeUI[quadTree.leafNodes.Length];
-        internalNodes = new InternalNodeUI[quadTree.internalNodes.Length];
+        leafNodes = new LeafNodeUI[numAgents];
+        internalNodes = new InternalNodeUI[numAgents - 1];
+        visitedInternalNode = new bool[numAgents - 1];
     }
 
     // Update is called once per frame
     void Update()
     {
-        if(quadTree.rootNode != null)
-        {
-            foreach(NodeUI internalNode in internalNodes)
-            {
-                if(internalNode != null)
-                internalNode.Visited = false;
-            }
 
-            DrawNode(quadTree.rootNode, null, false);
-        }
+    }
+
+    public void DrawQuadtree(InternalNodeData[] _internalNodeData, Agent[] _agents)
+    {
+        NodeData = _internalNodeData;
+        Agents = _agents;
+
+        visitedInternalNode = new bool[numAgents - 1];
+
+        DrawNode(0);
+    }
+
+    bool VisitedNode(int index)
+    {
+        if (index < 0 || index >= numAgents - 1) return true;
+        else return visitedInternalNode[index];
     }
 
     public void Highlight(NodeUI nodeToHighlight)
@@ -70,130 +87,71 @@ public class QuadTreeUI : MonoBehaviour
         drawZCurve.SetPoints(points, 0.5f);
     }
 
-
-    /// <summary>
-    /// To avoid creating and deleting NodeUIs, abstract process of retrieving one from the arrays
-    /// </summary>
-    /// <param name="node"></param>
-    /// <param name="isInternalNode"></param>
-    /// <returns></returns>
-    NodeUI GetNodeUI(Node node, out bool isInternalNode)
+    InternalNodeUI GetInternalNodeUI(InternalNodeData nodeData)
     {
-        if(node.GetType() == typeof(LeafNode))
+        if (internalNodes[nodeData.index] == null)
         {
-            isInternalNode = false;
-
-            if (leafNodes[node.id] == null)
-            {
-                LeafNodeUI newNodeUI = Instantiate<LeafNodeUI>(LeafNodeUIPrefab);
-                newNodeUI.transform.SetParent(canvas.transform, false);
-                newNodeUI.quadTree = quadTree;
-                leafNodes[node.id] = newNodeUI;
-            }
-            
-            return leafNodes[node.id];
+            InternalNodeUI newNodeUI = Instantiate<InternalNodeUI>(InternalNodeUIPrefab);
+            newNodeUI.transform.SetParent(canvas.transform, false);
+            newNodeUI.rectTransform.anchoredPosition = Vector2.zero;
+            internalNodes[nodeData.index] = newNodeUI;
         }
-        else
+
+        return internalNodes[nodeData.index];
+    }
+
+    LeafNodeUI GetLeafNodeUI(int index)
+    {
+        if (leafNodes[index] == null)
         {
-            isInternalNode = true;
-
-            if (internalNodes[node.id] == null)
-            {
-                InternalNodeUI newNodeUI = Instantiate<InternalNodeUI>(InternalNodeUIPrefab);
-                newNodeUI.transform.SetParent(canvas.transform, false);
-                newNodeUI.quadTreeUI = this;
-                internalNodes[node.id] = newNodeUI;
-            }
-
-            return internalNodes[node.id];
+            LeafNodeUI newNodeUI = Instantiate<LeafNodeUI>(LeafNodeUIPrefab);
+            newNodeUI.transform.SetParent(canvas.transform, false);
+            leafNodes[index] = newNodeUI;
         }
+
+        return leafNodes[index];
     }
 
-    bool AlreadyVisitedInternalNode(Node node)
+    void DrawNode(int index, InternalNodeUI parent = null, bool ASide = false)
     {
-        if (internalNodes[node.id] == null) return false;
-        else if (internalNodes[node.id].Visited == false) return false;
-        else return true;
-    }
+        if (VisitedNode(index))
+        {
+            return;
+        }
 
-    bool AlreadyVisitedInternalNode(int id)
-    {
-        if (id < 0 || id >= internalNodes.Length) return true;
-        else if (internalNodes[id] == null) return false;
-        else if (internalNodes[id].Visited == false) return false;
-        else return true;
-    }
+        visitedInternalNode[index] = true;
 
-    Rect DrawNode(Node node, InternalNodeUI parent = null, bool ASide = false)
-    {
-        bool isInternalNode = false;
-        NodeUI ui = GetNodeUI(node, out isInternalNode);
-        
-        ui.Node = node;
+        InternalNodeData nodeData = NodeData[index];
+
+        InternalNodeUI ui = GetInternalNodeUI(nodeData);
+
+        float width = unitWidth;
+        float height = (nodeData.range.y + 1 - nodeData.range.x) * unitHeight;
+        Vector2 position = Vector2.zero;
+
+        if (parent != null)
+        {
+            position = parent.rectTransform.anchoredPosition + parent.SplitOffset;
+        }
+
+        if (ASide)
+        {
+            position.y -= height;
+            ui.IndexKnob.anchoredPosition = new Vector2(0, height - unitHeight);
+        }
+
         ui.ASide = ASide;
 
-        if(parent != null)
-        {
-            ui.rectTransform.SetParent(parent.Children);
-        }
+        ui.indexText.text = index.ToString();
 
-        if(isInternalNode)
-        {
-            ui.Visited = true;
+        ui.rectTransform.sizeDelta = new Vector2(width, height);
+        ui.rectTransform.anchoredPosition = position;
 
-            InternalNode internalNode = node as InternalNode;
-            InternalNodeUI internalNodeUI = ui as InternalNodeUI;
+        ui.IndexKnob.sizeDelta = new Vector2(unitWidth, unitHeight);
 
-            Node childA, childB;
+        ui.SplitOffset = new Vector2(unitWidth, (nodeData.range.y - nodeData.childBIndex) * unitHeight);
 
-            //if we have already created an internal node with the ID, this reference must be to the leaf with the same index instead
-            if (AlreadyVisitedInternalNode(internalNode.childAID))
-            {
-                childA = quadTree.leafNodes[internalNode.childAID];
-            }
-            else
-            {
-                childA = quadTree.internalNodes[internalNode.childAID];
-            }
-
-            //if we have already created an internal node with the ID, this reference must be to the leaf with the same index instead
-            if (AlreadyVisitedInternalNode(internalNode.childBID))
-            {
-                childB = quadTree.leafNodes[internalNode.childBID];
-            }
-            else
-            {
-                childB = quadTree.internalNodes[internalNode.childBID];
-            }
-
-            Rect childABoundingBox = DrawNode(childA, internalNodeUI, true);
-            Rect childBBoundingBox = DrawNode(childB, internalNodeUI, false);
-
-            float xMin, yMin, xMax, yMax;
-
-            xMin = Mathf.Min(childABoundingBox.xMin, childBBoundingBox.xMin);
-            xMax = Mathf.Max(childABoundingBox.xMax, childBBoundingBox.xMax);
-            yMin = Mathf.Min(childABoundingBox.yMin, childBBoundingBox.yMin);
-            yMax = Mathf.Max(childABoundingBox.yMax, childBBoundingBox.yMax);
-
-            Vector2 min = new Vector2(xMin, yMin);
-            Vector2 max = new Vector2(xMax, yMax);
-
-            Rect internalNodeBoundingBox = new Rect(min, max - min);
-
-            ui.BoundingBox = internalNodeBoundingBox;
-
-            return internalNodeBoundingBox;
-        }
-        else
-        {
-            LeafNode leafNode = node as LeafNode;
-
-            Rect leafNodeBoundingBox = new Rect(leafNode.agent.position, Vector2.zero);
-
-            ui.BoundingBox = leafNodeBoundingBox;
-
-            return leafNodeBoundingBox;
-        }
+        DrawNode(nodeData.childAIndex, ui, true);
+        DrawNode(nodeData.childBIndex, ui, false);
     }
 }

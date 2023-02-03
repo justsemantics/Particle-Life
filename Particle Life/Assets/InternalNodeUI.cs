@@ -1,27 +1,24 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+[ExecuteInEditMode]
 public class InternalNodeUI : NodeUI
 {
-    public RectTransform Children;
-
     public RectTransform IndexKnob;
+    public Vector2 SplitOffset = Vector2.zero;
 
-    public QuadTreeUI quadTreeUI;
-
-
-
-    public override bool ASide 
-    { 
-        get => base.ASide;
+    private bool aSide;
+    public bool ASide 
+    {
+        get => aSide;
         set
         {
-            base.ASide = value;
+            aSide = value;
 
             if (ASide)
             {
-                IndexKnob.SetSiblingIndex(1);
                 BG.color = new Color(1, 0, 0, 0.5f);
             }
             else
@@ -33,8 +30,10 @@ public class InternalNodeUI : NodeUI
 
     void Highlight()
     {
-        quadTreeUI.Highlight(this);
+        OnHighlight(this);
     }
+
+    public Action<InternalNodeUI> OnHighlight = (node) => { };
 
     // Start is called before the first frame update
     void Start()
@@ -47,4 +46,5 @@ public class InternalNodeUI : NodeUI
     {
         
     }
+
 }

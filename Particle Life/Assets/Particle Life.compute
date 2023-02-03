@@ -4,6 +4,7 @@
 
 struct Agent
 {
+    int id;
     int species;
     float2 position;
     float2 velocity;
@@ -28,6 +29,7 @@ struct LeafNode
 struct InternalNode
 {
     int index;
+    int2 range;
     int childAIndex;
     int childBIndex;
 };
@@ -180,7 +182,7 @@ int2 DetermineRange(int id)
 
         if (last < 0 || last > numAgents - 1)
         {
-            break;
+            continue;
         }
 
         lastCode = agents[last].mortonCode;
@@ -274,7 +276,7 @@ void UpdateAgents (uint3 id : SV_DispatchThreadID)
 
     currentAgent.position += currentAgent.velocity * deltaTime;
     
-    currentAgent.position = clamp(currentAgent.position, float2(0, 0), float2(resolution, resolution));
+    //currentAgent.position = clamp(currentAgent.position, float2(0, 0), float2(resolution, resolution));
     
     agents[id.x] = currentAgent;
     
@@ -305,6 +307,7 @@ void QuadTree(uint3 id : SV_DispatchThreadID)
     
     InternalNode internalNode;
     internalNode.index = id.x;
+    internalNode.range = range;
     internalNode.childAIndex = split;
     internalNode.childBIndex = split + 1;
     

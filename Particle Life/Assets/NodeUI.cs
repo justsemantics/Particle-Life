@@ -8,7 +8,7 @@ using UnityEngine.UI;
 public class NodeUI : MonoBehaviour
 {
     [SerializeField]
-    TextMeshProUGUI indexText;
+    public TextMeshProUGUI indexText;
 
     public RectTransform rectTransform;
 
@@ -16,38 +16,4 @@ public class NodeUI : MonoBehaviour
     protected Image BG;
 
     public Rect BoundingBox;
-
-    virtual public bool ASide
-    {
-        get
-        {
-            return aSide;
-        }
-
-        set
-        {
-            aSide = value;
-        }
-    }
-
-    private bool aSide = false;
-    
-    public bool Visited = false;
-
-    virtual public Node Node
-    {
-        get
-        {
-            return node;
-        }
-
-        set
-        {
-            node = value;
-
-            indexText.text = node.id.ToString();
-        }
-    }
-
-    private Node node;
 }

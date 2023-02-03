@@ -1,7 +1,9 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEditorInternal;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 public class ParticleLife : MonoBehaviour
 {
@@ -60,7 +62,6 @@ public class ParticleLife : MonoBehaviour
         agents = quadTree.SortAgents(agents);
         quadTree.Construct(agents);
 
-        quadTreeUI.quadTree = quadTree;
 
         BeforeSplit = Instantiate<DrawZCurve>(zCurvePrefab);
         AfterSplit = Instantiate<DrawZCurve>(zCurvePrefab);
@@ -86,11 +87,11 @@ public class ParticleLife : MonoBehaviour
         zCurve.SetPoints(agents, height);
         */
         
-        agentsBuffer = new ComputeBuffer(numAgents, sizeof(int) + sizeof(float) * 5);
+        agentsBuffer = new ComputeBuffer(numAgents, sizeof(int) * 2 + sizeof(float) * 5);
         speciesBuffer = new ComputeBuffer(numSpecies, sizeof(float) * 4);
         rulesBuffer = new ComputeBuffer(numSpecies * numSpecies, sizeof(float) * 2);
         leafNodesBuffer = new ComputeBuffer(numAgents, sizeof(int));
-        internalNodesBuffer = new ComputeBuffer(numAgents - 1, sizeof(int) * 3);
+        internalNodesBuffer = new ComputeBuffer(numAgents - 1, sizeof(int) * 5);
 
         internalNodesData = new InternalNodeData[numAgents - 1];
         leafNodeData = new LeafNodeData[numAgents];
@@ -142,20 +143,48 @@ public class ParticleLife : MonoBehaviour
         }
     }
 
+    string MortonCodeToString(uint mortonCode)
+    {
+        string mortonCodeString = Convert.ToString(mortonCode, 2);
+
+        int leadingZeros = 32 - mortonCodeString.Length;
+
+        string result = "";
+
+        for(int i = 0; i < leadingZeros; i++)
+        {
+            result += "0";
+        }
+
+        result += mortonCodeString;
+
+        return result;
+    }
+
     // Update is called once per frame
     void Update()
     {
         agentsBuffer.GetData(agents);
+        for (int i = 0; i < agents.Length; i++)
+        {
+            Debug.Log(string.Format("Agent {0}: {1}",
+                agents[i].id,
+                MortonCodeToString(agents[i].mortonCode)));
+        }
         agents = quadTree.SortAgents(agents);
-        //quadTree.Construct(agents);
-        //zCurve.SetPoints(agents, height);
+        agentsBuffer.SetData(agents);
+        computeShader.Dispatch(1, numAgents / 64, 1, 1);
+        internalNodesBuffer.GetData(internalNodesData);
+        quadTreeUI.DrawQuadtree(internalNodesData, agents);
+
+
 
         computeShader.SetFloat("deltaTime", Time.deltaTime);
         computeShader.Dispatch(0, numAgents / 64, 1, 1);
 
-        computeShader.Dispatch(1, numAgents / 64, 1, 1);
 
-        internalNodesBuffer.GetData(internalNodesData);
+
+
 
         /*
         timer += Time.deltaTime;
@@ -184,10 +213,10 @@ public class ParticleLife : MonoBehaviour
         for(int i = 0; i < agentsToCreate; i++)
         {
             int species = i % numSpecies;
-            Vector2 position = (Random.insideUnitCircle + Vector2.one) / 2 * resolution;
+            Vector2 position = (Random.insideUnitCircle + Vector2.one) / 2f * resolution;
             Vector2 velocity = (Random.insideUnitCircle);
 
-            Agent a = new Agent(species, position, velocity);
+            Agent a = new Agent(i, species, position, velocity);
             createdAgents[i] = a;
         }
 
@@ -207,7 +236,7 @@ public class ParticleLife : MonoBehaviour
                 float offsetY = (j + 0.5f) * ((float)resolution / gridDivisions);
                 Vector2 velocity = Random.insideUnitCircle;
 
-                Agent a = new Agent(species, new Vector2(offsetX, offsetY), velocity);
+                Agent a = new Agent(i * gridDivisions + j, species, new Vector2(offsetX, offsetY), velocity);
                 createdAgents[i * gridDivisions + j] = a;
             }
         }
@@ -254,14 +283,16 @@ public class ParticleLife : MonoBehaviour
 
 public struct Agent
 {
-    public Agent(int _species, Vector2 _position, Vector2 _velocity, uint _mortonCode = 0)
+    public Agent(int _id, int _species, Vector2 _position, Vector2 _velocity, uint _mortonCode = 0)
     {
+        id = _id;
         species = _species;
         position = _position;
         velocity = _velocity;
         mortonCode = _mortonCode;
     }
 
+    public int id;
     public int species;
     public Vector2 position;
     public Vector2 velocity;
@@ -290,14 +321,15 @@ public struct Rule
 
 public struct LeafNodeData
 {
-    int index;
+    public int index;
 }
 
 public struct InternalNodeData
 {
-    int index;
-    int childAIndex;
-    int childBIndex;
+    public int index;
+    public Vector2Int range;
+    public int childAIndex;
+    public int childBIndex;
 }
 
 

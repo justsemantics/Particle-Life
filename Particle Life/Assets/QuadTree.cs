@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -107,6 +108,7 @@ public class QuadTree : MonoBehaviour
         uint yPos = (uint)(agent.position.y * positionMultiplier);
 
         agent.mortonCode = EncodeMorton2(xPos, yPos);
+
     }
 
     // Start is called before the first frame update
@@ -120,6 +122,7 @@ public class QuadTree : MonoBehaviour
     {
         
     }
+
 
     public void ConstructPseudoParallel(Agent[] agents)
     {
@@ -149,6 +152,7 @@ public class QuadTree : MonoBehaviour
 
         rootNode = internalNodes[0];
     }
+
 
     public Vector2Int DetermineRange(Agent[] agents, int id)
     {
