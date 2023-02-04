@@ -13,7 +13,7 @@ public class NodeUI : MonoBehaviour
     public RectTransform rectTransform;
 
     [SerializeField]
-    protected Image BG;
+    public Image BG;
 
     public Rect BoundingBox;
 }

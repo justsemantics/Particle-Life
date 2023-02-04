@@ -6,5 +6,5 @@ using UnityEngine;
 public class LeafNodeUI : NodeUI
 {
     public TextMeshProUGUI mortonCode;
-
+    
 }

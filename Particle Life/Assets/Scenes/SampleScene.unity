@@ -1175,7 +1175,7 @@ MonoBehaviour:
   unitHeight: 50
   unitWidth: 50
   canvas: {fileID: 1303827734}
-  LeafNodeUIPrefab: {fileID: 4503199742044886009, guid: fc7bd6bb485f9974ab832b8c6d45bac6, type: 3}
+  LeafNodeUIPrefab: {fileID: 2416147387293379698, guid: 68ad588522a6cb74d96546cd3cdaa2ff, type: 3}
   InternalNodeUIPrefab: {fileID: 8569463913313325948, guid: fde8962df98c9fd4bbfaa29c388460ca, type: 3}
   drawZCurve: {fileID: 0}
   drawZCurvePrefab: {fileID: 4798840170357100823, guid: 0d8b2a851ecafc142abf2fb468129fc5, type: 3}

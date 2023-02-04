@@ -116,6 +116,7 @@ public class QuadTreeUI : MonoBehaviour
     {
         if (VisitedNode(index))
         {
+            DrawChildNode(index, parent, ASide);
             return;
         }
 
@@ -157,5 +158,52 @@ public class QuadTreeUI : MonoBehaviour
 
         DrawNode(nodeData.childAIndex, ui, true);
         DrawNode(nodeData.childBIndex, ui, false);
+    }
+
+    void DrawChildNode(int index, InternalNodeUI parent, bool ASide)
+    {
+        LeafNodeUI ui = GetLeafNodeUI(index);
+
+        Vector2 position = Vector2.zero;
+
+        position = parent.SplitPosition;
+
+        if (ASide)
+        {
+            position.y -= unitHeight;
+        }
+
+        if (Agents[index].id == 32)
+        {
+            ui.BG.color = Color.red;
+        }
+        else
+        {
+            ui.BG.color = Color.white;
+        }
+
+        ui.indexText.text = index.ToString();
+
+        ui.rectTransform.anchoredPosition = position;
+
+        ui.mortonCode.text = MortonCodeToString(Agents[index].mortonCode);
+    }
+
+    string MortonCodeToString(uint mortonCode)
+    {
+        string mortonCodeString = Convert.ToString(mortonCode, 2);
+
+        int leadingZeros = 32 - mortonCodeString.Length;
+
+        string result = "";
+
+        for (int i = 0; i < leadingZeros; i++)
+        {
+            result += "0";
+        }
+
+        result += mortonCodeString;
+
+        return result;
     }
 }
