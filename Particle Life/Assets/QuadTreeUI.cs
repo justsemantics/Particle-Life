@@ -131,13 +131,17 @@ public class QuadTreeUI : MonoBehaviour
 
         if (parent != null)
         {
-            position = parent.rectTransform.anchoredPosition + parent.SplitOffset;
+            position = parent.SplitPosition;
         }
 
         if (ASide)
         {
             position.y -= height;
             ui.IndexKnob.anchoredPosition = new Vector2(0, height - unitHeight);
+        }
+        else
+        {
+            ui.IndexKnob.anchoredPosition = Vector2.zero;
         }
 
         ui.ASide = ASide;
@@ -149,7 +153,7 @@ public class QuadTreeUI : MonoBehaviour
 
         ui.IndexKnob.sizeDelta = new Vector2(unitWidth, unitHeight);
 
-        ui.SplitOffset = new Vector2(unitWidth, (nodeData.range.y - nodeData.childBIndex) * unitHeight);
+        ui.SplitPosition = new Vector2(position.x + unitWidth, nodeData.childBIndex * unitHeight);
 
         DrawNode(nodeData.childAIndex, ui, true);
         DrawNode(nodeData.childBIndex, ui, false);

@@ -7,7 +7,7 @@ using UnityEngine;
 public class InternalNodeUI : NodeUI
 {
     public RectTransform IndexKnob;
-    public Vector2 SplitOffset = Vector2.zero;
+    public Vector2 SplitPosition = Vector2.zero;
 
     private bool aSide;
     public bool ASide 
