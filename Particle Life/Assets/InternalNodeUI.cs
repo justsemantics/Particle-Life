@@ -8,6 +8,7 @@ public class InternalNodeUI : NodeUI
 {
     public RectTransform IndexKnob;
     public Vector2 SplitPosition = Vector2.zero;
+    public int index;
 
     private bool aSide;
     public bool ASide 
@@ -28,7 +29,7 @@ public class InternalNodeUI : NodeUI
         } 
     }
 
-    void Highlight()
+    public void Highlight()
     {
         OnHighlight(this);
     }

@@ -1,6 +1,7 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel UpdateAgents
 #pragma kernel QuadTree
+#pragma kernel BoundingBoxes
 
 struct Agent
 {
@@ -24,14 +25,18 @@ struct Rule
 struct LeafNode
 {
     int index;
+    int parentIndex;
 };
 
 struct InternalNode
 {
     int index;
     int2 range;
+    float4 boundingBox;
+    int parentIndex;
     int childAIndex;
     int childBIndex;
+    int visited;
 };
 
 int numAgents;
@@ -276,7 +281,7 @@ void UpdateAgents (uint3 id : SV_DispatchThreadID)
 
     currentAgent.position += currentAgent.velocity * deltaTime;
     
-    //currentAgent.position = clamp(currentAgent.position, float2(0, 0), float2(resolution, resolution));
+    currentAgent.position = clamp(currentAgent.position, float2(0, 0), float2(resolution, resolution));
     
     agents[id.x] = currentAgent;
     
@@ -287,13 +292,17 @@ void UpdateAgents (uint3 id : SV_DispatchThreadID)
 
 [numthreads(64, 1, 1)]
 void QuadTree(uint3 id : SV_DispatchThreadID)
-{
-    LeafNode leaf;
-    leaf.index = id.x;
+{   
+    leafNodes[id.x].index = id.x;
     
     if (id.x >= numAgents - 1)
     {
         return;
+    }
+    
+    if (id.x == 0)
+    {
+        internalNodes[id.x].parentIndex = -1;
     }
     
     int2 range = DetermineRange(id.x);
@@ -305,11 +314,60 @@ void QuadTree(uint3 id : SV_DispatchThreadID)
     
     int split = FindSplit(range.x, range.y);
     
-    InternalNode internalNode;
-    internalNode.index = id.x;
-    internalNode.range = range;
-    internalNode.childAIndex = split;
-    internalNode.childBIndex = split + 1;
+    internalNodes[id.x].index = id.x;
+    internalNodes[id.x].range = range;
+    internalNodes[id.x].childAIndex = split;
+    internalNodes[id.x].childBIndex = split + 1;
+    internalNodes[id.x].visited = 0;
     
-    internalNodes[id.x] = internalNode;
+    if (split == range.x)
+    {
+        leafNodes[range.x].parentIndex = id.x;
+    }
+    
+    if ((split + 1) == range.y)
+    {
+        leafNodes[range.y].parentIndex = id.x;
+    }
+    
+    internalNodes[split].parentIndex = id.x;   
+    internalNodes[split + 1].parentIndex = id.x;
+}
+
+[numthreads(64, 1, 1)]
+void BoundingBoxes(uint3 id : SV_DispatchThreadID)
+{
+    int parentIndex = leafNodes[id.x].parentIndex;
+    
+    if (parentIndex == -1)
+    {
+        return;
+    }
+    
+    float4 boundingBox;
+    boundingBox = agents[id.x].position.xyxy;
+    InternalNode nextNode = internalNodes[parentIndex];
+    int visited = 0;
+
+        visited = 0;
+        InterlockedExchange(internalNodes[parentIndex].visited, 1, visited);
+    
+        if (visited == 0)
+        {
+            internalNodes[parentIndex].boundingBox = boundingBox;
+            return;
+        }
+          
+        boundingBox.xy = min(internalNodes[parentIndex].boundingBox.xy, boundingBox.xy);
+        boundingBox.zw = max(internalNodes[parentIndex].boundingBox.zw, boundingBox.zw);
+        
+        internalNodes[parentIndex].boundingBox = boundingBox;
+        
+        parentIndex = internalNodes[parentIndex].parentIndex;
+        
+        if (parentIndex == -1)
+        {
+            return;
+        }
+    
 }

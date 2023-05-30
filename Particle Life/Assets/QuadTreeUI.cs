@@ -36,6 +36,13 @@ public class QuadTreeUI : MonoBehaviour
     [SerializeField]
     DrawZCurve drawZCurve, drawZCurvePrefab;
 
+    [SerializeField]
+    HighlightCircle highlightCircle;
+
+    InternalNodeUI highlightedInternalNode = null;
+
+    int highlightedAgentID = -1;
+
     // Start is called before the first frame update
     void Start()
     {
@@ -47,7 +54,10 @@ public class QuadTreeUI : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-
+        if(highlightedInternalNode != null)
+        {
+            Highlight(highlightedInternalNode);
+        }
     }
 
     public void DrawQuadtree(InternalNodeData[] _internalNodeData, Agent[] _agents)
@@ -66,8 +76,9 @@ public class QuadTreeUI : MonoBehaviour
         else return visitedInternalNode[index];
     }
 
-    public void Highlight(NodeUI nodeToHighlight)
+    public void Highlight(InternalNodeUI nodeToHighlight)
     {
+        highlightedInternalNode = nodeToHighlight;
         if(drawZCurve == null)
         {
             drawZCurve = Instantiate<DrawZCurve>(drawZCurvePrefab);
@@ -75,16 +86,34 @@ public class QuadTreeUI : MonoBehaviour
             drawZCurve.transform.position = new Vector3(-5, 0, -5);
         }
 
+        //Vector2[] points = new Vector2[4];
+        Vector4 boundingBox = NodeData[nodeToHighlight.index].boundingBox;
+        Debug.Log(NodeData[nodeToHighlight.index].parentIndex);
+        Debug.Log(boundingBox.ToString());
+        Vector2 min = new Vector2(boundingBox.x, boundingBox.y);
+        Vector2 max = new Vector2(boundingBox.z, boundingBox.w);
+
+        Rect BoundingBox = new Rect(min, max - min);
+
         Vector2[] points = new Vector2[4];
 
-        points[0] = nodeToHighlight.BoundingBox.min;
-        points[1] = new Vector2(nodeToHighlight.BoundingBox.xMax, nodeToHighlight.BoundingBox.yMin);
-        points[2] = nodeToHighlight.BoundingBox.max;
-        points[3] = new Vector2(nodeToHighlight.BoundingBox.xMin, nodeToHighlight.BoundingBox.yMax);
+        points[0] = min;
+        points[1] = new Vector2(BoundingBox.xMax, BoundingBox.yMin);
+        points[2] = max;
+        points[3] = new Vector2(BoundingBox.xMin, BoundingBox.yMax);
 
         drawZCurve.lineRenderer.loop = true;
 
         drawZCurve.SetPoints(points, 0.5f);
+        //Vector2Int range = NodeData[nodeToHighlight.index].range;
+        //Agent[] agentsToHighlight = new Agent[range.y - range.x];
+        //Array.Copy(Agents, range.x, agentsToHighlight, 0, range.y - range.x);
+        //drawZCurve.SetPoints(agentsToHighlight, 0.5f);
+    }
+
+    public void Highlight(LeafNodeUI nodeToHighlight)
+    {
+
     }
 
     InternalNodeUI GetInternalNodeUI(InternalNodeData nodeData)
@@ -94,6 +123,8 @@ public class QuadTreeUI : MonoBehaviour
             InternalNodeUI newNodeUI = Instantiate<InternalNodeUI>(InternalNodeUIPrefab);
             newNodeUI.transform.SetParent(canvas.transform, false);
             newNodeUI.rectTransform.anchoredPosition = Vector2.zero;
+            newNodeUI.OnHighlight = Highlight;
+            newNodeUI.index = nodeData.index;
             internalNodes[nodeData.index] = newNodeUI;
         }
 
@@ -112,6 +143,13 @@ public class QuadTreeUI : MonoBehaviour
         return leafNodes[index];
     }
 
+    void MoveHighlightCircle(Agent highlightedAgent)
+    {
+        highlightCircle.RectTransform.anchoredPosition = highlightedAgent.position;
+        highlightCircle.IDText.text = string.Format("Agent {0}", highlightedAgent.id);
+        highlightCircle.PositionText.text = string.Format("Position: ({0}, {1})", highlightedAgent.position.x, highlightedAgent.position.y);
+    }
+
     void DrawNode(int index, InternalNodeUI parent = null, bool ASide = false)
     {
         if (VisitedNode(index))
@@ -128,6 +166,11 @@ public class QuadTreeUI : MonoBehaviour
 
         float width = unitWidth;
         float height = (nodeData.range.y + 1 - nodeData.range.x) * unitHeight;
+
+        Vector2 min = Agents[nodeData.range.x].position;
+        Vector2 max = Agents[nodeData.range.y].position;
+        ui.BoundingBox = new Rect(min, max - min);
+
         Vector2 position = Vector2.zero;
 
         if (parent != null)
@@ -173,9 +216,11 @@ public class QuadTreeUI : MonoBehaviour
             position.y -= unitHeight;
         }
 
-        if (Agents[index].id == 32)
+        if (Agents[index].id == highlightedAgentID)
         {
             ui.BG.color = Color.red;
+
+            MoveHighlightCircle(Agents[index]);
         }
         else
         {

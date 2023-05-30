@@ -54,7 +54,7 @@ public class ParticleLife : MonoBehaviour
     void Start()
     {
 
-        agents = CreateAgents(numAgents);
+        agents = CreateAgentsGrid((int)Mathf.Sqrt(numAgents));
         species = CreateSpecies(numSpecies);
         rules = CreateRules(species);
 
@@ -90,8 +90,8 @@ public class ParticleLife : MonoBehaviour
         agentsBuffer = new ComputeBuffer(numAgents, sizeof(int) * 2 + sizeof(float) * 5);
         speciesBuffer = new ComputeBuffer(numSpecies, sizeof(float) * 4);
         rulesBuffer = new ComputeBuffer(numSpecies * numSpecies, sizeof(float) * 2);
-        leafNodesBuffer = new ComputeBuffer(numAgents, sizeof(int));
-        internalNodesBuffer = new ComputeBuffer(numAgents - 1, sizeof(int) * 5);
+        leafNodesBuffer = new ComputeBuffer(numAgents, sizeof(int) * 2);
+        internalNodesBuffer = new ComputeBuffer(numAgents - 1, sizeof(int) * 7 + sizeof(float) * 4);
 
         internalNodesData = new InternalNodeData[numAgents - 1];
         leafNodeData = new LeafNodeData[numAgents];
@@ -113,6 +113,10 @@ public class ParticleLife : MonoBehaviour
         computeShader.SetBuffer(1, "agents", agentsBuffer);
         computeShader.SetBuffer(1, "leafNodes", leafNodesBuffer);
         computeShader.SetBuffer(1, "internalNodes", internalNodesBuffer);
+
+        computeShader.SetBuffer(2, "agents", agentsBuffer);
+        computeShader.SetBuffer(2, "leafNodes", leafNodesBuffer);
+        computeShader.SetBuffer(2, "internalNodes", internalNodesBuffer);
 
 
 
@@ -174,6 +178,8 @@ public class ParticleLife : MonoBehaviour
         agents = quadTree.SortAgents(agents);
         agentsBuffer.SetData(agents);
         computeShader.Dispatch(1, numAgents / 64, 1, 1);
+        //computeShader.Dispatch(2, numAgents / 64, 1, 1);
+
         internalNodesBuffer.GetData(internalNodesData);
         quadTreeUI.DrawQuadtree(internalNodesData, agents);
 
@@ -322,14 +328,18 @@ public struct Rule
 public struct LeafNodeData
 {
     public int index;
+    public int parentIndex;
 }
 
 public struct InternalNodeData
 {
     public int index;
     public Vector2Int range;
+    public Vector4 boundingBox;
+    public int parentIndex;
     public int childAIndex;
     public int childBIndex;
+    public int visited;
 }
 
 
