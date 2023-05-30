@@ -166,19 +166,24 @@ public class ParticleLife : MonoBehaviour
     }
 
     // Update is called once per frame
+    /// <summary>
+    /// 
+    /// </summary>
     void Update()
     {
         agentsBuffer.GetData(agents);
+        /*
         for (int i = 0; i < agents.Length; i++)
         {
             Debug.Log(string.Format("Agent {0}: {1}",
                 agents[i].id,
                 MortonCodeToString(agents[i].mortonCode)));
         }
+        */
         agents = quadTree.SortAgents(agents);
         agentsBuffer.SetData(agents);
         computeShader.Dispatch(1, numAgents / 64, 1, 1);
-        //computeShader.Dispatch(2, numAgents / 64, 1, 1);
+        computeShader.Dispatch(2, numAgents / 64, 1, 1);
 
         internalNodesBuffer.GetData(internalNodesData);
         quadTreeUI.DrawQuadtree(internalNodesData, agents);

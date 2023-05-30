@@ -34,7 +34,7 @@ public class InternalNodeUI : NodeUI
         OnHighlight(this);
     }
 
-    public Action<InternalNodeUI> OnHighlight = (node) => { };
+    public Action<InternalNodeUI> OnHighlight = (node) => { Debug.Log("AHAHAH"); };
 
     // Start is called before the first frame update
     void Start()

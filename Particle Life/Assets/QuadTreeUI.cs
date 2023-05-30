@@ -88,19 +88,19 @@ public class QuadTreeUI : MonoBehaviour
 
         //Vector2[] points = new Vector2[4];
         Vector4 boundingBox = NodeData[nodeToHighlight.index].boundingBox;
-        Debug.Log(NodeData[nodeToHighlight.index].parentIndex);
+        Debug.Log(NodeData[nodeToHighlight.index].parentIndex.ToString());
         Debug.Log(boundingBox.ToString());
-        Vector2 min = new Vector2(boundingBox.x, boundingBox.y);
-        Vector2 max = new Vector2(boundingBox.z, boundingBox.w);
+        //Vector2 min = new Vector2(boundingBox.x, boundingBox.y);
+        //Vector2 max = new Vector2(boundingBox.z, boundingBox.w);
 
-        Rect BoundingBox = new Rect(min, max - min);
+        //Rect BoundingBox = new Rect(min, max - min);
 
         Vector2[] points = new Vector2[4];
 
-        points[0] = min;
-        points[1] = new Vector2(BoundingBox.xMax, BoundingBox.yMin);
-        points[2] = max;
-        points[3] = new Vector2(BoundingBox.xMin, BoundingBox.yMax);
+        points[0] = new Vector2(boundingBox.x, boundingBox.y);
+        points[1] = new Vector2(boundingBox.z, boundingBox.y);
+        points[2] = new Vector2(boundingBox.z, boundingBox.w);
+        points[3] = new Vector2(boundingBox.x, boundingBox.w);
 
         drawZCurve.lineRenderer.loop = true;
 

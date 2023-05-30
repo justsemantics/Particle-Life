@@ -96,7 +96,7 @@ public class QuadTree : MonoBehaviour
 
         for (int i = 0; i < agents.Length; i++)
         {
-            Debug.Log(string.Format("{0}, {1}", DecodeMorton2X(agents[i].mortonCode) / positionMultiplier, DecodeMorton2Y(agents[i].mortonCode) / positionMultiplier));
+            //Debug.Log(string.Format("{0}, {1}", DecodeMorton2X(agents[i].mortonCode) / positionMultiplier, DecodeMorton2Y(agents[i].mortonCode) / positionMultiplier));
         }
 
         return agents;

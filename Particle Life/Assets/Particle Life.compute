@@ -324,14 +324,20 @@ void QuadTree(uint3 id : SV_DispatchThreadID)
     {
         leafNodes[range.x].parentIndex = id.x;
     }
+    else
+    {
+        internalNodes[split].parentIndex = id.x;   
+    }
     
     if ((split + 1) == range.y)
     {
         leafNodes[range.y].parentIndex = id.x;
     }
+    else
+    {
+        internalNodes[split + 1].parentIndex = id.x;
+    }
     
-    internalNodes[split].parentIndex = id.x;   
-    internalNodes[split + 1].parentIndex = id.x;
 }
 
 [numthreads(64, 1, 1)]
@@ -349,17 +355,21 @@ void BoundingBoxes(uint3 id : SV_DispatchThreadID)
     InternalNode nextNode = internalNodes[parentIndex];
     int visited = 0;
 
+    do{
         visited = 0;
         InterlockedExchange(internalNodes[parentIndex].visited, 1, visited);
     
         if (visited == 0)
         {
             internalNodes[parentIndex].boundingBox = boundingBox;
+
             return;
         }
           
-        boundingBox.xy = min(internalNodes[parentIndex].boundingBox.xy, boundingBox.xy);
-        boundingBox.zw = max(internalNodes[parentIndex].boundingBox.zw, boundingBox.zw);
+        boundingBox.x = min(internalNodes[parentIndex].boundingBox.x, boundingBox.x);
+        boundingBox.y = min(internalNodes[parentIndex].boundingBox.y, boundingBox.y);
+        boundingBox.z = max(internalNodes[parentIndex].boundingBox.z, boundingBox.z);
+        boundingBox.w = max(internalNodes[parentIndex].boundingBox.w, boundingBox.w);
         
         internalNodes[parentIndex].boundingBox = boundingBox;
         
@@ -369,5 +379,7 @@ void BoundingBoxes(uint3 id : SV_DispatchThreadID)
         {
             return;
         }
+
+    }while(visited == 1);
     
 }
