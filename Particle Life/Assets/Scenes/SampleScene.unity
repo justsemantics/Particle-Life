@@ -155,10 +155,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cc1d3840ffb0446458597338dff02eca, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  numAgents: 64
+  numAgents: 409600
   numSpecies: 10
   resolution: 1024
-  maxDistance: 100
+  maxDistance: 200
   minDistance: 3
   computeShader: {fileID: 7200000, guid: f6b53a23a02aebd48a0c1588cb903251, type: 3}
   zCurvePrefab: {fileID: 4798840170357100823, guid: 0d8b2a851ecafc142abf2fb468129fc5, type: 3}
@@ -1415,7 +1415,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 707779631}
   m_Direction: 2
   m_Value: 0
-  m_Size: 0.14125
+  m_Size: 0.1859375
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:

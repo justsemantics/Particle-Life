@@ -301,9 +301,9 @@ public class QuadTree : MonoBehaviour
         uint firstCode = agents[first].mortonCode;
         uint lastCode = agents[last].mortonCode;
 
-        Debug.Log(string.Format("First Code: {0}, Last Code: {1}",
-            System.Convert.ToString(firstCode, 2),
-            System.Convert.ToString(lastCode, 2)));
+        //Debug.Log(string.Format("First Code: {0}, Last Code: {1}",
+        //    System.Convert.ToString(firstCode, 2),
+        //    System.Convert.ToString(lastCode, 2)));
 
         int commonPrefix = CountLeadingZeros(firstCode ^ lastCode);
 

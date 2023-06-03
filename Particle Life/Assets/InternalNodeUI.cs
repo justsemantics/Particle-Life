@@ -8,7 +8,8 @@ public class InternalNodeUI : NodeUI
 {
     public RectTransform IndexKnob;
     public Vector2 SplitPosition = Vector2.zero;
-    public int index;
+
+    public InternalNodeData Data;
 
     private bool aSide;
     public bool ASide 

@@ -2,6 +2,7 @@
 #pragma kernel UpdateAgents
 #pragma kernel QuadTree
 #pragma kernel BoundingBoxes
+#pragma kernel DecayBoard
 
 struct Agent
 {
@@ -36,6 +37,8 @@ struct InternalNode
     int parentIndex;
     int childAIndex;
     int childBIndex;
+    int childAIsLeaf;
+    int childBIsLeaf;
     int visited;
 };
 
@@ -108,8 +111,8 @@ float CalculateRepulsionForce(float distanceSquared)
 
 float CalculateForce(float distanceSquared, Rule rule)
 {
-    float t = (distanceSquared - minDistance) / (maxDistance - minDistance);
-    float cutoff = rule.force.x / (maxDistance - minDistance);
+    float t = (distanceSquared - pow(minDistance, 2)) / (pow(maxDistance, 2) - pow(minDistance, 2));
+    float cutoff = rule.force.x / (pow(maxDistance, 2) - pow(minDistance, 2));
     float force = t < cutoff ? lerp(0, rule.force.y, t / cutoff) : lerp(rule.force.y, 0, t / (1 - cutoff));
 
     return force;
@@ -231,10 +234,10 @@ int FindSplit(int first, int last)
             int splitPrefix = LeadingBitsInCommon(firstCode, splitCode);
             if (splitPrefix > commonPrefix)
             {
-                    //cool, resume search from this point
+                //cool, resume search from this point
                 split = newSplit;
             }
-                //otherwise, keep stepping from the previous split
+            //otherwise, keep stepping from the previous split
         }
     } while (step > 1); //iterate until we have tried stepping at every size
 
@@ -247,9 +250,42 @@ void UpdateAgents (uint3 id : SV_DispatchThreadID)
 {
     Agent currentAgent = agents[id.x];
     
+    
+    float4 targetBoundingBox;
+    
+    targetBoundingBox.x = max(currentAgent.position.x - maxDistance, 0);
+    targetBoundingBox.y = max(currentAgent.position.y - maxDistance, 0);
+    targetBoundingBox.z = min(currentAgent.position.x + maxDistance, resolution);
+    targetBoundingBox.w = min(currentAgent.position.y + maxDistance, resolution);
+    
+    int currentIndex = leafNodes[id.x].parentIndex;
+    float4 currentBoundingBox = internalNodes[currentIndex].boundingBox;
+    
+    while (
+        currentBoundingBox.x > targetBoundingBox.x ||
+        currentBoundingBox.y > targetBoundingBox.y ||
+        currentBoundingBox.z < targetBoundingBox.z ||
+        currentBoundingBox.w < targetBoundingBox.w)
+    {
+        int nextIndex = internalNodes[currentIndex].parentIndex;
+        
+        if (nextIndex == -1)
+        {
+            break;
+        }
+        
+        currentIndex = nextIndex;
+        currentBoundingBox = internalNodes[currentIndex].boundingBox;
+    }
+    
+    int start = internalNodes[currentIndex].range.x;
+    int end = internalNodes[currentIndex].range.y;
+
+    
     float2 force = float2(0, 0);
     
-    for (int i = 0; i < numAgents; i++)
+    
+    for (int i = start; i <= end; i++)
     {
         if (i == id.x)
             continue;
@@ -258,7 +294,7 @@ void UpdateAgents (uint3 id : SV_DispatchThreadID)
         float2 currentToOther = otherAgent.position - currentAgent.position;
         float distanceSquared = dot(currentToOther, currentToOther);
         
-        if(distanceSquared > maxDistance)
+        if (distanceSquared > pow(maxDistance, 2))
             continue;
         
         
@@ -290,6 +326,17 @@ void UpdateAgents (uint3 id : SV_DispatchThreadID)
     Result[texturePosition] = species[currentAgent.species].color;
 }
 
+[numthreads(8, 8, 1)]
+void DecayBoard(uint3 id : SV_DispatchThreadID)
+{
+    float4 current = Result[id.xy];
+    
+    current -= float4(0.01, 0.01, 0.01, 0.01);
+    saturate(current);
+    
+    Result[id.xy] = current;
+}
+
 [numthreads(64, 1, 1)]
 void QuadTree(uint3 id : SV_DispatchThreadID)
 {   
@@ -316,6 +363,7 @@ void QuadTree(uint3 id : SV_DispatchThreadID)
     
     internalNodes[id.x].index = id.x;
     internalNodes[id.x].range = range;
+    internalNodes[id.x].boundingBox = float4(0, 0, 0, 0);
     internalNodes[id.x].childAIndex = split;
     internalNodes[id.x].childBIndex = split + 1;
     internalNodes[id.x].visited = 0;
@@ -323,19 +371,23 @@ void QuadTree(uint3 id : SV_DispatchThreadID)
     if (split == range.x)
     {
         leafNodes[range.x].parentIndex = id.x;
+        internalNodes[id.x].childAIsLeaf = 1;
     }
     else
     {
-        internalNodes[split].parentIndex = id.x;   
+        internalNodes[split].parentIndex = id.x;
+        internalNodes[id.x].childAIsLeaf = 0;
     }
     
     if ((split + 1) == range.y)
     {
         leafNodes[range.y].parentIndex = id.x;
+        internalNodes[id.x].childBIsLeaf = 1;
     }
     else
     {
         internalNodes[split + 1].parentIndex = id.x;
+        internalNodes[id.x].childBIsLeaf = 0;
     }
     
 }
@@ -343,38 +395,54 @@ void QuadTree(uint3 id : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void BoundingBoxes(uint3 id : SV_DispatchThreadID)
 {
+    //each thread starts at a unique leaf node and starts walking towards the root
     int parentIndex = leafNodes[id.x].parentIndex;
     
-    if (parentIndex == -1)
-    {
-        return;
-    }
-    
     float4 boundingBox;
-    boundingBox = agents[id.x].position.xyxy;
-    InternalNode nextNode = internalNodes[parentIndex];
-    int visited = 0;
-
-    do{
-        visited = 0;
-        InterlockedExchange(internalNodes[parentIndex].visited, 1, visited);
+    int visited;
     
+    do{
+        //the first thread to visit a node has calculated one of that node's childen's bounding boxes, but the other isn't ready yet -- "visited" will still be set to 0 in that case
+        InterlockedExchange(internalNodes[parentIndex].visited, 1, visited);
+        
+        //we can't do any operations in here because they won't reliably be done before the second thread starts messing with it -- just quit and let the lucky one handle it
         if (visited == 0)
         {
-            internalNodes[parentIndex].boundingBox = boundingBox;
-
             return;
         }
-          
-        boundingBox.x = min(internalNodes[parentIndex].boundingBox.x, boundingBox.x);
-        boundingBox.y = min(internalNodes[parentIndex].boundingBox.y, boundingBox.y);
-        boundingBox.z = max(internalNodes[parentIndex].boundingBox.z, boundingBox.z);
-        boundingBox.w = max(internalNodes[parentIndex].boundingBox.w, boundingBox.w);
+        
+        
+        //the second thread calculates the bounding box by comparing the node's children's bounding boxes
+        float4 childABoundingBox, childBBoundingBox;
+        
+        //if the child is a leaf node, just use the agent's position
+        if (internalNodes[parentIndex].childAIsLeaf == 1)
+        {
+            childABoundingBox = agents[internalNodes[parentIndex].childAIndex].position.xyxy;
+        }
+        else
+        {
+            childABoundingBox = internalNodes[internalNodes[parentIndex].childAIndex].boundingBox;
+        }
+        
+        //if the child is a leaf node, just use the agent's position
+        if (internalNodes[parentIndex].childBIsLeaf == 1)
+        {
+            childBBoundingBox = agents[internalNodes[parentIndex].childBIndex].position.xyxy;
+        }
+        else
+        {
+            childBBoundingBox = internalNodes[internalNodes[parentIndex].childBIndex].boundingBox;
+        }
+
+        boundingBox.xy = min(childABoundingBox.xy, childBBoundingBox.xy);
+        boundingBox.zw = max(childABoundingBox.zw, childBBoundingBox.zw);
         
         internalNodes[parentIndex].boundingBox = boundingBox;
         
         parentIndex = internalNodes[parentIndex].parentIndex;
         
+        //stop if we hit the root node
         if (parentIndex == -1)
         {
             return;

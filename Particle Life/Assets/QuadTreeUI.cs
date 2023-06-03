@@ -28,7 +28,8 @@ public class QuadTreeUI : MonoBehaviour
     LeafNodeUI[] leafNodes;
     InternalNodeUI[] internalNodes;
 
-    InternalNodeData[] NodeData;
+    InternalNodeData[] internalNodeData;
+    LeafNodeData[] leafNodeData;
     Agent[] Agents;
 
     bool[] visitedInternalNode;
@@ -60,9 +61,10 @@ public class QuadTreeUI : MonoBehaviour
         }
     }
 
-    public void DrawQuadtree(InternalNodeData[] _internalNodeData, Agent[] _agents)
+    public void DrawQuadtree(InternalNodeData[] _internalNodeData, LeafNodeData[] _leafNodeData, Agent[] _agents)
     {
-        NodeData = _internalNodeData;
+        internalNodeData = _internalNodeData;
+        leafNodeData = _leafNodeData;
         Agents = _agents;
 
         visitedInternalNode = new bool[numAgents - 1];
@@ -87,8 +89,8 @@ public class QuadTreeUI : MonoBehaviour
         }
 
         //Vector2[] points = new Vector2[4];
-        Vector4 boundingBox = NodeData[nodeToHighlight.index].boundingBox;
-        Debug.Log(NodeData[nodeToHighlight.index].parentIndex.ToString());
+        Vector4 boundingBox = internalNodeData[nodeToHighlight.Data.index].boundingBox;
+        Debug.Log(internalNodeData[nodeToHighlight.Data.index].parentIndex.ToString());
         Debug.Log(boundingBox.ToString());
         //Vector2 min = new Vector2(boundingBox.x, boundingBox.y);
         //Vector2 max = new Vector2(boundingBox.z, boundingBox.w);
@@ -113,7 +115,7 @@ public class QuadTreeUI : MonoBehaviour
 
     public void Highlight(LeafNodeUI nodeToHighlight)
     {
-
+        Debug.Log(nodeToHighlight.Data.parentIndex);
     }
 
     InternalNodeUI GetInternalNodeUI(InternalNodeData nodeData)
@@ -124,11 +126,13 @@ public class QuadTreeUI : MonoBehaviour
             newNodeUI.transform.SetParent(canvas.transform, false);
             newNodeUI.rectTransform.anchoredPosition = Vector2.zero;
             newNodeUI.OnHighlight = Highlight;
-            newNodeUI.index = nodeData.index;
             internalNodes[nodeData.index] = newNodeUI;
         }
 
-        return internalNodes[nodeData.index];
+        InternalNodeUI internalNodeUI = internalNodes[nodeData.index];
+        internalNodeUI.Data = nodeData;
+
+        return internalNodeUI;
     }
 
     LeafNodeUI GetLeafNodeUI(int index)
@@ -137,10 +141,13 @@ public class QuadTreeUI : MonoBehaviour
         {
             LeafNodeUI newNodeUI = Instantiate<LeafNodeUI>(LeafNodeUIPrefab);
             newNodeUI.transform.SetParent(canvas.transform, false);
+            newNodeUI.OnHighlight = Highlight;
             leafNodes[index] = newNodeUI;
         }
 
-        return leafNodes[index];
+        LeafNodeUI leafNodeUI = leafNodes[index];
+        leafNodeUI.Data = leafNodeData[index];
+        return leafNodeUI;
     }
 
     void MoveHighlightCircle(Agent highlightedAgent)
@@ -160,7 +167,7 @@ public class QuadTreeUI : MonoBehaviour
 
         visitedInternalNode[index] = true;
 
-        InternalNodeData nodeData = NodeData[index];
+        InternalNodeData nodeData = internalNodeData[index];
 
         InternalNodeUI ui = GetInternalNodeUI(nodeData);
 

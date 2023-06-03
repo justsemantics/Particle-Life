@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEditorInternal;
 using UnityEngine;
+using UnityEngine.Profiling;
 using Random = UnityEngine.Random;
 
 public class ParticleLife : MonoBehaviour
@@ -54,7 +55,7 @@ public class ParticleLife : MonoBehaviour
     void Start()
     {
 
-        agents = CreateAgentsGrid((int)Mathf.Sqrt(numAgents));
+        agents = CreateAgents(numAgents);
         species = CreateSpecies(numSpecies);
         rules = CreateRules(species);
 
@@ -91,7 +92,7 @@ public class ParticleLife : MonoBehaviour
         speciesBuffer = new ComputeBuffer(numSpecies, sizeof(float) * 4);
         rulesBuffer = new ComputeBuffer(numSpecies * numSpecies, sizeof(float) * 2);
         leafNodesBuffer = new ComputeBuffer(numAgents, sizeof(int) * 2);
-        internalNodesBuffer = new ComputeBuffer(numAgents - 1, sizeof(int) * 7 + sizeof(float) * 4);
+        internalNodesBuffer = new ComputeBuffer(numAgents - 1, sizeof(int) * 9 + sizeof(float) * 4);
 
         internalNodesData = new InternalNodeData[numAgents - 1];
         leafNodeData = new LeafNodeData[numAgents];
@@ -119,7 +120,6 @@ public class ParticleLife : MonoBehaviour
         computeShader.SetBuffer(2, "internalNodes", internalNodesBuffer);
 
 
-
         drawTexture = new RenderTexture(resolution, resolution, 0);
         drawTexture.enableRandomWrite = true;
         drawTexture.Create();
@@ -131,7 +131,9 @@ public class ParticleLife : MonoBehaviour
         computeShader.SetFloat("minDistance", minDistance);
         computeShader.SetFloat("maxDistance", maxDistance);
         computeShader.SetFloat("repulsionForce", 10f);
+
         computeShader.SetTexture(0, "Result", drawTexture);
+        computeShader.SetTexture(3, "Result", drawTexture);
 
         Renderer renderer = GetComponent<Renderer>();
         renderer.material.SetTexture("_MainTex", drawTexture);
@@ -182,18 +184,21 @@ public class ParticleLife : MonoBehaviour
         */
         agents = quadTree.SortAgents(agents);
         agentsBuffer.SetData(agents);
+        computeShader.SetFloat("deltaTime", Time.deltaTime);
+
+
         computeShader.Dispatch(1, numAgents / 64, 1, 1);
         computeShader.Dispatch(2, numAgents / 64, 1, 1);
 
-        internalNodesBuffer.GetData(internalNodesData);
-        quadTreeUI.DrawQuadtree(internalNodesData, agents);
+        //internalNodesBuffer.GetData(internalNodesData);
+        //leafNodesBuffer.GetData(leafNodeData);
+        //quadTreeUI.DrawQuadtree(internalNodesData, leafNodeData, agents);
 
 
 
-        computeShader.SetFloat("deltaTime", Time.deltaTime);
         computeShader.Dispatch(0, numAgents / 64, 1, 1);
 
-
+        computeShader.Dispatch(3, resolution / 8, resolution / 8, 1);
 
 
 
@@ -279,8 +284,8 @@ public class ParticleLife : MonoBehaviour
         {
             for(int j = 0; j < species.Length; j++)
             {
-                float forceAmount = Random.value * 1000 - 500;
-                float forceDistance = maxDistance / Random.value * 10;
+                float forceAmount = Random.value * 2 - 1f;
+                float forceDistance = minDistance;
 
                 Rule r = new Rule(new Vector2(forceDistance, forceAmount));
 
@@ -344,6 +349,8 @@ public struct InternalNodeData
     public int parentIndex;
     public int childAIndex;
     public int childBIndex;
+    public int childAIsLeaf;
+    public int childBIsLeaf;
     public int visited;
 }
 
